@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LIFF 測試</title>
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    body { font-family: -apple-system, sans-serif; padding: 20px; font-size: 16px; line-height: 1.6; }
+    #out { white-space: pre-wrap; word-break: break-all; background:#f5f5f5; padding:12px; border-radius:8px; }
+    .ok { color:#1e7e34; } .err { color:#b71c1c; }
+  </style>
+</head>
+<body>
+  <h2>LIFF 測試頁（GitHub Pages）</h2>
+  <div id="out">啟動中…</div>
+  <script>
+    var out = document.getElementById('out');
+    function log(msg, cls) { out.textContent += '\n' + msg; if (cls) out.className = cls; }
+    out.textContent = '1) 載入 SDK… liff=' + (typeof liff);
+    liff.init({ liffId: '2010451233-a781rqsm' })
+      .then(function () {
+        log('2) liff.init 成功 ✅');
+        log('   isInClient=' + liff.isInClient() + '  isLoggedIn=' + liff.isLoggedIn());
+        if (!liff.isLoggedIn()) { log('3) 未登入 → 導向 liff.login()…'); liff.login(); return; }
+        return liff.getProfile();
+      })
+      .then(function (p) {
+        if (!p) return;
+        log('3) getProfile 成功 ✅', 'ok');
+        log('   userId=' + p.userId);
+        log('   displayName=' + p.displayName);
+        log('\n🎉 LIFF 在 GitHub Pages 正常運作！');
+      })
+      .catch(function (e) {
+        log('❌ 失敗：' + (e && e.message ? e.message : e), 'err');
+        log('   ' + JSON.stringify(e));
+      });
+  </script>
+</body>
+</html>
