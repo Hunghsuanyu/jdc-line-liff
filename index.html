@@ -167,22 +167,38 @@
     var LIFF_ID = '2010451233-a781rqsm';
 
     // ─── JSONP helper ──────────────────────────────────────────────────────────
-    function jsonp(action, params) {
+    // 診斷強化：區分「script 根本沒載入(WebView 封鎖跨網域)」與「script 載入了但
+    // callback 沒被執行(回應沒被當 JS 跑)」。逾時訊息會帶出 loaded 狀態。
+    function jsonp(action, params, timeoutMs) {
       return new Promise(function (resolve, reject) {
         var cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
         var s = document.createElement('script');
-        var timer = setTimeout(function () { cleanup(); reject(new Error('逾時')); }, 30000);
+        var loaded = false;   // onload 是否觸發過
+        var fired = false;    // callback 是否被呼叫過
+        var timer = setTimeout(function () {
+          cleanup();
+          reject(new Error('逾時(loaded=' + loaded + ')'));
+        }, timeoutMs || 15000);
         function cleanup() {
           clearTimeout(timer);
           try { delete window[cb]; } catch (e) { window[cb] = undefined; }
           if (s.parentNode) s.parentNode.removeChild(s);
         }
-        window[cb] = function (data) { cleanup(); resolve(data); };
+        window[cb] = function (data) { fired = true; cleanup(); resolve(data); };
         var qs = Object.keys(params || {}).map(function (k) {
           return encodeURIComponent(k) + '=' + encodeURIComponent(params[k] == null ? '' : params[k]);
         }).join('&');
         s.src = GAS_URL + '?action=' + encodeURIComponent(action) + (qs ? ('&' + qs) : '') + '&callback=' + cb;
-        s.onerror = function () { cleanup(); reject(new Error('網路錯誤')); };
+        s.onload = function () {
+          loaded = true;
+          // script 已下載並執行完畢，但 callback 沒被叫到 → 回應不是可執行的 JSONP
+          if (!fired) {
+            setTimeout(function () {
+              if (!fired) { cleanup(); reject(new Error('script 已載入但 callback 未執行')); }
+            }, 500);
+          }
+        };
+        s.onerror = function () { cleanup(); reject(new Error('script 載入失敗(onerror)')); };
         document.body.appendChild(s);
       });
     }
@@ -238,8 +254,15 @@
       gDisplayName = displayName;
 
       // 一次 JSONP 取回「名單＋綁定狀態」(避免 LINE 內建瀏覽器對第二個 JSONP script 卡住)
-      dbg('④ 載入資料(JSONP)…');
-      jsonp('getInit', { userId: userId }).then(function (data) {
+      // 心跳：每秒更新秒數。若畫面變空白＝整頁被導走；若秒數持續跳動但卡住＝JSONP 真的卡在 WebView。
+      var t0 = Date.now();
+      var beat = setInterval(function () {
+        var el = document.getElementById('loading');
+        if (el) el.textContent = '④ 載入資料(JSONP)… ' + Math.round((Date.now() - t0) / 1000) + 's';
+      }, 1000);
+      dbg('④ 載入資料(JSONP)… 0s');
+      jsonp('getInit', { userId: userId }, 15000).then(function (data) {
+        clearInterval(beat);
         var un = (data && data.unitsAndNames) || {};
         gNamesByUnit = un.namesByUnit || {};
 
@@ -299,7 +322,12 @@
           show('section-report');
         }
       }).catch(function (err) {
-        document.getElementById('loading').textContent = '載入失敗：' + (err && err.message ? err.message : err);
+        clearInterval(beat);
+        var el = document.getElementById('loading');
+        if (el) {
+          el.innerHTML = '<div class="msg msg-err">載入失敗：' + (err && err.message ? err.message : err) +
+            '</div><button class="btn btn-secondary" onclick="location.reload()">重新整理</button>';
+        }
       });
     }
 
