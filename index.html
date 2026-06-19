@@ -3,38 +3,422 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>LIFF 測試</title>
+  <title>日本國土開發 LINE 平台</title>
   <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <style>
-    body { font-family: -apple-system, sans-serif; padding: 20px; font-size: 16px; line-height: 1.6; }
-    #out { white-space: pre-wrap; word-break: break-all; background:#f5f5f5; padding:12px; border-radius:8px; }
-    .ok { color:#1e7e34; } .err { color:#b71c1c; }
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Kaku Gothic ProN", "Noto Sans TC", sans-serif;
+      padding: 20px 16px 40px;
+      font-size: 16px;
+      line-height: 1.6;
+      color: #333;
+      background: #f7f7f7;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 20px; margin: 0 0 20px; color: #1a1a1a; }
+    h2 { font-size: 17px; margin: 0 0 14px; color: #222; }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+    }
+    label { display: block; margin-bottom: 6px; font-size: 14px; color: #555; font-weight: 600; }
+    select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 15px;
+      font-family: inherit;
+      background: #fafafa;
+      margin-bottom: 14px;
+      -webkit-appearance: none;
+    }
+    select:focus, textarea:focus { outline: none; border-color: #06c755; background: #fff; }
+    textarea { resize: vertical; min-height: 80px; }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: .02em;
+    }
+    .btn-primary { background: #06c755; color: #fff; }
+    .btn-primary:active { background: #05a847; }
+    .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+    .btn-secondary { background: #eee; color: #444; margin-top: 10px; }
+    .msg { padding: 12px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 14px; }
+    .msg-ok   { background: #e6f9ee; color: #1a7d44; }
+    .msg-err  { background: #fdecea; color: #b71c1c; }
+    .msg-info { background: #e8f0fe; color: #1a56c4; }
+    #loading { text-align: center; padding: 40px 0; color: #888; font-size: 15px; }
+    #main { display: none; }
+    .radio-group { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+    .radio-group label {
+      flex: 1;
+      min-width: 80px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 15px;
+      font-weight: normal;
+      color: #333;
+      cursor: pointer;
+      padding: 9px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #fafafa;
+    }
+    .radio-group input[type="radio"] { accent-color: #06c755; }
+    .radio-group label:has(input:checked) { border-color: #06c755; background: #e6f9ee; }
+    .hint { font-size: 13px; color: #888; margin-bottom: 14px; }
+    hr { border: none; border-top: 1px solid #eee; margin: 20px 0; }
+    #section-report { margin-top: 8px; }
   </style>
 </head>
 <body>
-  <h2>LIFF 測試頁（GitHub Pages）</h2>
-  <div id="out">啟動中…</div>
+  <div id="loading">載入中，請稍候…</div>
+  <div id="main">
+    <h1>日本國土開發<br>LINE 平台</h1>
+
+    <!-- 未綁定：綁定表單 -->
+    <div id="section-bind" class="card" style="display:none">
+      <h2>請確認您的身分</h2>
+      <p class="hint">請選擇您的所屬單位與姓名，系統將寄送驗證信到您的公司信箱。</p>
+      <label for="sel-unit">所屬單位</label>
+      <select id="sel-unit">
+        <option value="">── 請選擇 ──</option>
+      </select>
+      <label for="sel-name">姓名</label>
+      <select id="sel-name" disabled>
+        <option value="">── 請先選單位 ──</option>
+      </select>
+      <div id="bind-msg"></div>
+      <button class="btn btn-primary" id="btn-bind" disabled>確認送出</button>
+    </div>
+
+    <!-- 已綁定未驗證 -->
+    <div id="section-pending" class="card" style="display:none">
+      <h2>等待 Email 驗證</h2>
+      <p>驗證信已寄至您的公司信箱，請點擊信件中的連結完成驗證。</p>
+      <p class="hint">驗證後重新開啟此頁面即可使用所有功能。</p>
+      <div id="pending-msg"></div>
+      <button class="btn btn-secondary" id="btn-rebind">重新選擇身分</button>
+    </div>
+
+    <!-- 已驗證：活動問卷 -->
+    <div id="section-activity" class="card" style="display:none">
+      <h2 id="act-title">活動出席回覆</h2>
+      <p id="act-question" class="hint"></p>
+      <label>出席狀況</label>
+      <div class="radio-group" id="rg-attend">
+        <label><input type="radio" name="attend" value="參加"> 參加</label>
+        <label><input type="radio" name="attend" value="不參加"> 不參加</label>
+      </div>
+      <div id="diet-row">
+        <label>葷素</label>
+        <div class="radio-group" id="rg-diet">
+          <label><input type="radio" name="diet" value="葷食"> 葷食</label>
+          <label><input type="radio" name="diet" value="素食"> 素食</label>
+        </div>
+      </div>
+      <label for="txt-opinion">意見（選填）</label>
+      <textarea id="txt-opinion" placeholder="請輸入您的意見或備註…"></textarea>
+      <div id="act-msg"></div>
+      <button class="btn btn-primary" id="btn-act">送出回覆</button>
+    </div>
+
+    <!-- 已驗證，無活動 -->
+    <div id="section-no-activity" class="card" style="display:none">
+      <h2>目前沒有開放中的活動</h2>
+      <p class="hint">待活動公告後，請重新開啟此頁面填寫。</p>
+    </div>
+
+    <!-- 回報區（已驗證時顯示；綁定失敗找不到信箱時也顯示） -->
+    <div id="section-report" class="card" style="display:none">
+      <h2>問題回報</h2>
+      <p class="hint">若遇到任何問題，請填寫後送出，管理員將協助處理。</p>
+      <label for="rpt-unit">所屬單位</label>
+      <select id="rpt-unit">
+        <option value="">── 請選擇 ──</option>
+      </select>
+      <label for="rpt-name">姓名</label>
+      <select id="rpt-name" disabled>
+        <option value="">── 請先選單位 ──</option>
+      </select>
+      <label for="rpt-issue">問題說明</label>
+      <textarea id="rpt-issue" placeholder="請描述您的問題…"></textarea>
+      <div id="rpt-msg"></div>
+      <button class="btn btn-secondary" id="btn-rpt">送出回報</button>
+    </div>
+  </div>
+
   <script>
-    var out = document.getElementById('out');
-    function log(msg, cls) { out.textContent += '\n' + msg; if (cls) out.className = cls; }
-    out.textContent = '1) 載入 SDK… liff=' + (typeof liff);
-    liff.init({ liffId: '2010451233-a781rqsm' })
+    // ─── 設定 ──────────────────────────────────────────────────────────────────
+    var GAS_URL = 'https://script.google.com/macros/s/AKfycbxaDoA_7aOW325p8165VegSqdRL8gRhfTEMfjosdh1A0T4rmzj4Pl7F3k5PToe2po-xtg/exec';
+    var LIFF_ID = '2010451233-a781rqsm';
+
+    // ─── JSONP helper ──────────────────────────────────────────────────────────
+    function jsonp(action, params) {
+      return new Promise(function (resolve, reject) {
+        var cb = 'cb_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+        var s = document.createElement('script');
+        var timer = setTimeout(function () { cleanup(); reject(new Error('逾時')); }, 30000);
+        function cleanup() {
+          clearTimeout(timer);
+          try { delete window[cb]; } catch (e) { window[cb] = undefined; }
+          if (s.parentNode) s.parentNode.removeChild(s);
+        }
+        window[cb] = function (data) { cleanup(); resolve(data); };
+        var qs = Object.keys(params || {}).map(function (k) {
+          return encodeURIComponent(k) + '=' + encodeURIComponent(params[k] == null ? '' : params[k]);
+        }).join('&');
+        s.src = GAS_URL + '?action=' + encodeURIComponent(action) + (qs ? ('&' + qs) : '') + '&callback=' + cb;
+        s.onerror = function () { cleanup(); reject(new Error('網路錯誤')); };
+        document.body.appendChild(s);
+      });
+    }
+
+    // ─── 全域狀態 ──────────────────────────────────────────────────────────────
+    var gUserId = '';
+    var gDisplayName = '';
+    var gNamesByUnit = {};
+    var gActivityId = '';
+
+    // ─── UI helpers ────────────────────────────────────────────────────────────
+    function showMsg(el, text, type) {
+      el.innerHTML = text ? '<div class="msg msg-' + type + '">' + text + '</div>' : '';
+    }
+    function show(id) { document.getElementById(id).style.display = ''; }
+    function hide(id) { document.getElementById(id).style.display = 'none'; }
+
+    function populateUnitSelect(selUnit, namesByUnit) {
+      selUnit.innerHTML = '<option value="">── 請選擇 ──</option>';
+      Object.keys(namesByUnit).forEach(function (unit) {
+        var opt = document.createElement('option');
+        opt.value = unit;
+        opt.textContent = unit;
+        selUnit.appendChild(opt);
+      });
+    }
+
+    function onUnitChange(selUnit, selName, namesByUnit) {
+      var unit = selUnit.value;
+      selName.innerHTML = '';
+      if (!unit) {
+        selName.innerHTML = '<option value="">── 請先選單位 ──</option>';
+        selName.disabled = true;
+      } else {
+        var names = namesByUnit[unit] || [];
+        var placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '── 請選擇姓名 ──';
+        selName.appendChild(placeholder);
+        names.forEach(function (n) {
+          var opt = document.createElement('option');
+          opt.value = n;
+          opt.textContent = n;
+          selName.appendChild(opt);
+        });
+        selName.disabled = false;
+      }
+    }
+
+    // ─── 主流程 ────────────────────────────────────────────────────────────────
+    function startApp(userId, displayName) {
+      gUserId = userId;
+      gDisplayName = displayName;
+
+      // 先抓員工名單（綁定表單與回報區都需要）
+      jsonp('getUnitsAndNames').then(function (data) {
+        gNamesByUnit = (data && data.namesByUnit) || {};
+        var units = (data && data.units) || [];
+
+        // 填充綁定表單下拉
+        var selUnit = document.getElementById('sel-unit');
+        var selName = document.getElementById('sel-name');
+        populateUnitSelect(selUnit, gNamesByUnit);
+        selUnit.addEventListener('change', function () {
+          onUnitChange(selUnit, selName, gNamesByUnit);
+          updateBindBtn();
+        });
+        selName.addEventListener('change', updateBindBtn);
+
+        // 填充回報區下拉
+        var rptUnit = document.getElementById('rpt-unit');
+        var rptName = document.getElementById('rpt-name');
+        populateUnitSelect(rptUnit, gNamesByUnit);
+        rptUnit.addEventListener('change', function () {
+          onUnitChange(rptUnit, rptName, gNamesByUnit);
+        });
+
+        // 查綁定狀態
+        return jsonp('getBindingState', { userId: userId });
+      }).then(function (state) {
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('main').style.display = '';
+
+        if (!state || !state.bound) {
+          // 未綁定 → 顯示綁定表單
+          show('section-bind');
+        } else if (!state.verified) {
+          // 已綁定未驗證
+          show('section-pending');
+        } else {
+          // 已驗證
+          if (state.activity) {
+            gActivityId = state.activity.id;
+            document.getElementById('act-title').textContent = state.activity.name || '活動出席回覆';
+            document.getElementById('act-question').textContent = state.activity.question || '';
+            // 填入既有回答
+            if (state.existingAnswer) {
+              var ea = state.existingAnswer;
+              var radios = document.querySelectorAll('input[name="attend"]');
+              radios.forEach(function (r) { if (r.value === ea.attend) r.checked = true; });
+              var dietRadios = document.querySelectorAll('input[name="diet"]');
+              dietRadios.forEach(function (r) { if (r.value === ea.diet) r.checked = true; });
+              document.getElementById('txt-opinion').value = ea.opinion || '';
+            }
+            // 不參加時隱藏葷素欄
+            document.querySelectorAll('input[name="attend"]').forEach(function (r) {
+              r.addEventListener('change', function () {
+                document.getElementById('diet-row').style.display = r.value === '參加' ? '' : 'none';
+              });
+            });
+            show('section-activity');
+          } else {
+            show('section-no-activity');
+          }
+          show('section-report');
+        }
+      }).catch(function (err) {
+        document.getElementById('loading').textContent = '載入失敗：' + (err && err.message ? err.message : err);
+      });
+    }
+
+    // ─── 綁定送出 ──────────────────────────────────────────────────────────────
+    function updateBindBtn() {
+      var selUnit = document.getElementById('sel-unit');
+      var selName = document.getElementById('sel-name');
+      document.getElementById('btn-bind').disabled = !(selUnit.value && selName.value);
+    }
+
+    document.getElementById('btn-bind').addEventListener('click', function () {
+      var btn = this;
+      var unit = document.getElementById('sel-unit').value;
+      var name = document.getElementById('sel-name').value;
+      var msgEl = document.getElementById('bind-msg');
+      if (!unit || !name) return;
+      btn.disabled = true;
+      showMsg(msgEl, '送出中…', 'info');
+      jsonp('submitBinding', { userId: gUserId, displayName: gDisplayName, unit: unit, name: name })
+        .then(function (res) {
+          if (res && res.ok) {
+            showMsg(msgEl, '已送出！請至公司信箱點擊驗證連結。', 'ok');
+            hide('section-bind');
+            show('section-pending');
+          } else if (res && res.needReport) {
+            showMsg(msgEl, res.msg || '請使用下方回報功能聯絡管理員。', 'err');
+            // 把回報區的單位姓名帶入
+            var rptUnit = document.getElementById('rpt-unit');
+            var rptName = document.getElementById('rpt-name');
+            rptUnit.value = unit;
+            onUnitChange(rptUnit, rptName, gNamesByUnit);
+            rptName.value = name;
+            document.getElementById('main').style.display = '';
+            show('section-report');
+            btn.disabled = false;
+          } else {
+            showMsg(msgEl, (res && res.error) || '送出失敗，請稍後再試。', 'err');
+            btn.disabled = false;
+          }
+        }).catch(function (err) {
+          showMsg(msgEl, '網路錯誤：' + (err && err.message ? err.message : err), 'err');
+          btn.disabled = false;
+        });
+    });
+
+    // ─── 重新選擇身分 ──────────────────────────────────────────────────────────
+    document.getElementById('btn-rebind').addEventListener('click', function () {
+      hide('section-pending');
+      show('section-bind');
+    });
+
+    // ─── 活動送出 ──────────────────────────────────────────────────────────────
+    document.getElementById('btn-act').addEventListener('click', function () {
+      var btn = this;
+      var msgEl = document.getElementById('act-msg');
+      var attend = (document.querySelector('input[name="attend"]:checked') || {}).value || '';
+      var diet = (document.querySelector('input[name="diet"]:checked') || {}).value || '';
+      var opinion = document.getElementById('txt-opinion').value.trim();
+      if (!attend) { showMsg(msgEl, '請選擇出席狀況。', 'err'); return; }
+      if (attend === '參加' && !diet) { showMsg(msgEl, '請選擇葷食或素食。', 'err'); return; }
+      btn.disabled = true;
+      showMsg(msgEl, '送出中…', 'info');
+      jsonp('submitActivity', { userId: gUserId, activityId: gActivityId, attend: attend, diet: diet, opinion: opinion })
+        .then(function (res) {
+          if (res && res.ok) {
+            showMsg(msgEl, '已成功送出，謝謝！', 'ok');
+          } else {
+            showMsg(msgEl, (res && res.msg) || (res && res.error) || '送出失敗。', 'err');
+            btn.disabled = false;
+          }
+        }).catch(function (err) {
+          showMsg(msgEl, '網路錯誤：' + (err && err.message ? err.message : err), 'err');
+          btn.disabled = false;
+        });
+    });
+
+    // ─── 問題回報送出 ──────────────────────────────────────────────────────────
+    document.getElementById('btn-rpt').addEventListener('click', function () {
+      var btn = this;
+      var msgEl = document.getElementById('rpt-msg');
+      var unit  = document.getElementById('rpt-unit').value;
+      var name  = document.getElementById('rpt-name').value;
+      var issue = document.getElementById('rpt-issue').value.trim();
+      if (!unit || !name) { showMsg(msgEl, '請選擇所屬單位與姓名。', 'err'); return; }
+      if (!issue) { showMsg(msgEl, '請輸入問題說明。', 'err'); return; }
+      btn.disabled = true;
+      showMsg(msgEl, '送出中…', 'info');
+      jsonp('submitReport', { unit: unit, name: name, issue: issue })
+        .then(function (res) {
+          if (res && res.ok) {
+            showMsg(msgEl, '回報已送出，管理員將盡快處理。', 'ok');
+            document.getElementById('rpt-issue').value = '';
+          } else {
+            showMsg(msgEl, (res && res.error) || '送出失敗，請稍後再試。', 'err');
+            btn.disabled = false;
+          }
+        }).catch(function (err) {
+          showMsg(msgEl, '網路錯誤：' + (err && err.message ? err.message : err), 'err');
+          btn.disabled = false;
+        });
+    });
+
+    // ─── LIFF init ─────────────────────────────────────────────────────────────
+    liff.init({ liffId: LIFF_ID })
       .then(function () {
-        log('2) liff.init 成功 ✅');
-        log('   isInClient=' + liff.isInClient() + '  isLoggedIn=' + liff.isLoggedIn());
-        if (!liff.isLoggedIn()) { log('3) 未登入 → 導向 liff.login()…'); liff.login(); return; }
+        if (!liff.isLoggedIn()) {
+          liff.login();
+          return;
+        }
         return liff.getProfile();
       })
-      .then(function (p) {
-        if (!p) return;
-        log('3) getProfile 成功 ✅', 'ok');
-        log('   userId=' + p.userId);
-        log('   displayName=' + p.displayName);
-        log('\n🎉 LIFF 在 GitHub Pages 正常運作！');
+      .then(function (profile) {
+        if (!profile) return;
+        startApp(profile.userId, profile.displayName);
       })
-      .catch(function (e) {
-        log('❌ 失敗：' + (e && e.message ? e.message : e), 'err');
-        log('   ' + JSON.stringify(e));
+      .catch(function (err) {
+        document.getElementById('loading').textContent =
+          'LIFF 初始化失敗：' + (err && err.message ? err.message : err);
       });
   </script>
 </body>
